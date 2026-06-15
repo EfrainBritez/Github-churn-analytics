@@ -1,4 +1,7 @@
 # Model trained with random forest data
+
+> See `reports/feature_importance_report.md` for a written report that explains the feature selection methods, agreement/disagreement between them, and the real-world retention decisions that follow from the model.
+
 Classification Report:
               precision    recall  f1-score   support
 
