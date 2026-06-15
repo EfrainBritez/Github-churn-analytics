@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This report explains the feature selection methods used in the GitHub churn prediction project, compares their outputs, and connects the selected predictors to real retention decisions. The goal is to show conceptual understanding, not just code results.
+This report explains the feature selection methods used in the GitHub churn prediction project, in this specific case the data is scrapped from users from Paraguay, Argentina and Brazil, a total of 1500 users, compares their outputs, and connects the selected predictors to real retention decisions. The goal is to show conceptual understanding, not just code results.
 
 ## 2. Why feature selection matters
 
@@ -42,6 +42,8 @@ Common predictors across methods are:
 - `active_repo_ratio`
 
 These features are stable signals that consistently appear important for predicting churn. In business terms, they reflect account maturity, engagement level, and repository activity — all plausible churn drivers.
+
+For build the model the data is splited into two, a set of 1200 to train and a set of 300 to verify the prediction accuracy
 
 ### Disagreement and why it happened
 
