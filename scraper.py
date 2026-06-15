@@ -26,6 +26,28 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+
+def _load_dotenv(dotenv_path: Path = Path(".env")) -> None:
+    """Load environment variables from a .env file into os.environ.
+
+    Existing environment variables are not overridden.
+    """
+    if not dotenv_path.exists():
+        return
+
+    with dotenv_path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+_load_dotenv()
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -38,6 +60,11 @@ RATE_LIMIT_SLEEP: float = 1.0      # polite delay between requests
 RETRY_SLEEP: float = 60.0          # wait when rate-limited
 MAX_RETRIES: int = 3               # per-request retry cap
 REPOS_PER_PAGE: int = 100          # maximum allowed by GitHub
+CHECKPOINT_FREQUENCY: int = 50     # save progress after this many users
+
+# Set a personal access token in the GITHUB_TOKEN environment variable to get higher GitHub API limits.
+# On Windows PowerShell: $env:GITHUB_TOKEN = "<your_token>"
+# On Windows CMD: set GITHUB_TOKEN=<your_token>
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -383,9 +410,33 @@ def save_raw_data(data: list[dict], filename: str) -> None:
 
     # --- JSON (full nested structure) ---
     try:
+        # If an existing JSON file is present, merge by `login` to avoid losing previous data.
+        merged: dict[str, dict] = {}
+
+        if json_path.exists():
+            try:
+                with json_path.open("r", encoding="utf-8") as fh:
+                    existing = json.load(fh)
+                    if isinstance(existing, list):
+                        for rec in existing:
+                            login = rec.get("login")
+                            if login:
+                                merged[str(login).lower()] = rec
+            except Exception:
+                logger.warning("Existing JSON present but failed to load; overwriting.")
+
+        # Add/replace with incoming records (new data takes precedence)
+        for rec in data:
+            login = rec.get("login")
+            if login:
+                merged[str(login).lower()] = rec
+
+        merged_list = list(merged.values())
+
         with json_path.open("w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=2, default=str)
-        logger.info("Saved JSON: %s", json_path)
+            json.dump(merged_list, fh, ensure_ascii=False, indent=2, default=str)
+
+        logger.info("Saved JSON (merged): %s  (%d total records)", json_path, len(merged_list))
     except OSError as exc:
         logger.error("Failed to write JSON [%s]: %s", json_path, exc)
 
@@ -393,11 +444,11 @@ def save_raw_data(data: list[dict], filename: str) -> None:
     try:
         flat_records = [
             {k: v for k, v in record.items() if k != "repositories"}
-            for record in data
+            for record in merged_list
         ]
         df = pd.DataFrame(flat_records)
         df.to_csv(csv_path, index=False, encoding="utf-8")
-        logger.info("Saved CSV: %s  (%d rows)", csv_path, len(df))
+        logger.info("Saved CSV (merged): %s  (%d rows)", csv_path, len(df))
     except (OSError, ValueError) as exc:
         logger.error("Failed to write CSV [%s]: %s", csv_path, exc)
 
@@ -405,6 +456,9 @@ def save_raw_data(data: list[dict], filename: str) -> None:
 # ---------------------------------------------------------------------------
 # Input helpers
 # ---------------------------------------------------------------------------
+
+
+SEARCH_USERS_URL: str = f"{GITHUB_API_BASE}/search/users"
 
 
 def load_usernames(path: str) -> list[str]:
@@ -444,18 +498,76 @@ def load_usernames(path: str) -> list[str]:
     return usernames
 
 
+def search_users_by_location(location: str, max_pages: int = 5) -> list[str]:
+    """Search GitHub users by location using the REST search API.
+
+    Parameters
+    ----------
+    location:
+        Location value for the GitHub search query.
+    max_pages:
+        Maximum number of search pages to request.
+
+    Returns
+    -------
+    list[str]
+        List of GitHub login names from the search results.
+    """
+    usernames: list[str] = []
+    seen: set[str] = set()
+
+    for page in range(1, max_pages + 1):
+        params = {
+            "q": f"location:{location}",
+            "per_page": 100,
+            "page": page,
+        }
+        response = _get(SEARCH_USERS_URL, params=params)
+        if not response or not isinstance(response, dict):
+            logger.warning("Search request failed for location: %s", location)
+            break
+
+        items = response.get("items")
+        if not isinstance(items, list) or len(items) == 0:
+            break
+
+        for item in items:
+            login = item.get("login")
+            if isinstance(login, str):
+                lower = login.lower()
+                if lower not in seen:
+                    seen.add(lower)
+                    usernames.append(login)
+
+        if len(items) < 100:
+            break
+
+        total_count = response.get("total_count")
+        if isinstance(total_count, int) and len(usernames) >= total_count:
+            break
+
+    logger.info(
+        "Found %d unique users for location '%s' via GitHub search.",
+        len(usernames),
+        location,
+    )
+    return usernames
+
+
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
 
 
-def run_collection(usernames: list[str]) -> pd.DataFrame:
+def run_collection(usernames: list[str], checkpoint: int = CHECKPOINT_FREQUENCY) -> pd.DataFrame:
     """Run the full data-collection pipeline for a list of GitHub usernames.
 
     Parameters
     ----------
     usernames:
         GitHub login names to process.
+    checkpoint:
+        Save partial results after this many successful user records.
 
     Returns
     -------
@@ -473,7 +585,12 @@ def run_collection(usernames: list[str]) -> pd.DataFrame:
         else:
             failures += 1
 
+        if len(collected) > 0 and len(collected) % checkpoint == 0:
+            logger.info("Checkpoint reached at %d users, saving partial data.", len(collected))
+            save_raw_data(collected, "github_users")
+
     if collected:
+        logger.info("Final save of collected data.")
         save_raw_data(collected, "github_users")
 
     flat_records = [
@@ -507,14 +624,23 @@ if __name__ == "__main__":
         description="Scrape GitHub user activity data for the Churn Predictor project."
     )
     parser.add_argument(
+        "--location",
+        type=str,
+        default="argentina",
+        help="GitHub location to search for users (default: argentina).",
+    )
+    parser.add_argument(
         "--input",
         type=str,
-        default="usernames.txt",
-        help="Path to a text file with one GitHub username per line.",
+        default=None,
+        help="Optional path to a text file with one GitHub username per line. Overrides location search if provided.",
     )
     args = parser.parse_args()
 
-    usernames_list = load_usernames(args.input)
+    if args.input:
+        usernames_list = load_usernames(args.input)
+    else:
+        usernames_list = search_users_by_location(args.location)
 
     if not usernames_list:
         logger.error("No usernames to process. Exiting.")

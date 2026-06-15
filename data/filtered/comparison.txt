@@ -1,0 +1,75 @@
+Filter comparison summary
+=========================
+
+1. filtered_features.csv
+------------------------
+- Source: `filter_selection.py`
+- Output columns: 10 engineered features + churn
+- Observed behavior: no features were removed under the default variance/correlation thresholds.
+- Result: this filter currently preserves the full feature set for the processed dataset.
+
+2. dt_selected.csv
+-------------------
+- Source: `dt_selection.py`
+- Output columns: 6 features + churn
+- Selected features:
+  - days_since_last_activity
+  - account_age_days
+  - repos_per_year
+  - followers_following_ratio
+  - active_repo_ratio
+  - inactive_repo_ratio
+- Ranking summary from `dt_feature_importance.csv`:
+  - days_since_last_activity: 1.0
+  - all other features: 0.0
+- Interpretation: the decision tree model relied almost entirely on `days_since_last_activity`.
+  The remaining selected features are included based on the requested count rather than strong tree importance.
+
+3. rfe_selected.csv
+--------------------
+- Source: `rfe_selection.py`
+- Output columns: 10 features + churn
+- Ranking summary from `rfe_rankings.csv`:
+  - rank 1 selected features:
+    - days_since_last_activity
+    - account_age_days
+    - repos_per_year
+    - followers_following_ratio
+    - active_repo_ratio
+    - repo_activity_density
+  - rank 2-5 features:
+    - inactive_repo_ratio
+    - avg_stars_per_repo
+    - avg_forks_per_repo
+    - repository_maintenance_ratio
+- Interpretation: RFE identifies 6 top features when configured to select 6. The current output file contains the full feature set, suggesting RFE was run with a larger feature count or default selection.
+
+4. rf_selected.csv
+-------------------
+- Source: `rf_selection.py`
+- Output columns: 10 features + churn
+- Ranking summary from `rf_feature_importance.csv`:
+  - days_since_last_activity: 0.7662
+  - active_repo_ratio: 0.0484
+  - followers_following_ratio: 0.0410
+  - repos_per_year: 0.0344
+  - repo_activity_density: 0.0271
+  - account_age_days: 0.0225
+  - avg_stars_per_repo: 0.0187
+  - avg_forks_per_repo: 0.0175
+  - inactive_repo_ratio: 0.0131
+  - repository_maintenance_ratio: 0.0112
+- Interpretation: Random Forest importance strongly favors `days_since_last_activity`, but the output still includes all features because the filter was not asked to reduce the count enough.
+
+Overall comparison
+-------------------
+- `filter_selection.py` is a statistical filter that removes low-variance or highly correlated features. In this dataset, default settings preserved all features.
+- `dt_selection.py` is a Decision Tree filter. It selected 6 features, but the tree importance shows one dominant predictor.
+- `rfe_selection.py` is Recursive Feature Elimination. It can select the top features by rank, with 6 clear rank-1 features in the current ranking.
+- `rf_selection.py` is a Random Forest importance filter. It ranks features by importance, but the current output retains many features.
+
+Recommendations
+----------------
+- Use `--top-k` or `--min-importance` with `rf_selection.py` to reduce the feature set.
+- Use `--features 6` with `rfe_selection.py` if you want only the top 6 features.
+- Adjust `--variance` and `--correlation` thresholds in `filter_selection.py` if you want stricter filtering.

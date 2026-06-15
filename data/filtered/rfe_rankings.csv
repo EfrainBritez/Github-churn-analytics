@@ -1,0 +1,11 @@
+feature,ranking
+days_since_last_activity,1
+repos_per_year,1
+followers_following_ratio,1
+active_repo_ratio,1
+inactive_repo_ratio,1
+repo_activity_density,1
+account_age_days,2
+avg_forks_per_repo,3
+repository_maintenance_ratio,4
+avg_stars_per_repo,5

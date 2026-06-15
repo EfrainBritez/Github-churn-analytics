@@ -1,0 +1,10 @@
+feature,importance
+followers_following_ratio,0.19994092439178587
+account_age_days,0.15922313022283735
+repos_per_year,0.1386438208268372
+avg_stars_per_repo,0.11186778465434259
+avg_forks_per_repo,0.10412880259576057
+active_repo_ratio,0.08676465604865972
+repo_activity_density,0.08319773845783748
+repository_maintenance_ratio,0.059435898261917905
+inactive_repo_ratio,0.056797244540021156
