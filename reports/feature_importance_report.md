@@ -93,12 +93,6 @@ That means a good working feature set is:
 - `active_repo_ratio`
 - optionally `avg_stars_per_repo` and `avg_forks_per_repo` if the model performance improves.
 
-## 7. Next steps
-
-- Validate the model with cross-validation and an independent hold-out test set.
-- Measure the actual retention lift by running targeted interventions and checking whether predicted churn users respond.
-- Monitor whether any selected features become outdated as GitHub usage patterns change.
-
-## 8. Conclusion
+## 7. Conclusion
 
 The feature selection analysis shows that the model is driven by engagement and repository activity. The strongest business insight is that retention efforts should focus on reactivating low-activity users and supporting users whose social or repository engagement is declining. These are concrete, actionable findings from the feature importance work.
