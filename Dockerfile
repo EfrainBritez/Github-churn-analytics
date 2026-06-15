@@ -26,5 +26,5 @@ USER appuser
 
 EXPOSE 8000
 
-# Use uvicorn to serve the FastAPI app
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use uvicorn to serve the FastAPI app with the web interface
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

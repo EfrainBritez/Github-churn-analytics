@@ -677,3 +677,57 @@ if __name__ == "__main__":
         print("\nDescriptive statistics:")
         print(feature_df.describe().to_string())
     print("=" * 60)
+
+# ---------------------------------------------------------------------------
+# Prediction interface
+# ---------------------------------------------------------------------------
+
+
+def compute_features_from_user(
+    user_data: dict,
+    repos_data: list[dict],
+) -> dict[str, Any]:
+    """Convert GitHub API responses into prediction-ready features.
+
+    Parameters
+    ----------
+    user_data:
+        Raw user dict from GitHub API `/users/{username}` endpoint.
+    repos_data:
+        List of raw repository dicts from GitHub API `/users/{username}/repos` endpoint.
+
+    Returns
+    -------
+    dict[str, Any]
+        Feature dictionary suitable for model prediction.
+        Excludes the 'login' field and leaky columns.
+
+    Raises
+    ------
+    ValueError
+        If the user or repository data is malformed.
+
+    Example
+    -------
+    >>> user_data = requests.get("https://api.github.com/users/torvalds").json()
+    >>> repos_data = requests.get("https://api.github.com/users/torvalds/repos?per_page=100").json()
+    >>> features = compute_features_from_user(user_data, repos_data)
+    >>> model.predict(features)
+    """
+    # Construct the internal format expected by build_feature_record
+    user_record = dict(user_data)  # shallow copy
+    user_record["repositories"] = repos_data
+
+    # Build the full feature record
+    record = build_feature_record(user_record)
+
+    if record is None:
+        raise ValueError(f"Failed to build feature record for user: {user_data.get('login', 'unknown')}")
+
+    # Remove the login and leaky columns for prediction
+    prediction_features = {
+        k: v for k, v in record.items()
+        if k not in ["login", "days_since_last_activity", "active_repo_ratio", "inactive_repo_ratio"]
+    }
+
+    return prediction_features
