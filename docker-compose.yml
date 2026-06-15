@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  web:
+    build: .
+    image: github-churn-analytics-web:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+    restart: unless-stopped
+    # For development, uncomment the volume mount below to mount local code
+    # volumes:
+    #   - ./:/app
